@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>عدّاد إكسير الخصم</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lalezar&family=IBM+Plex+Sans+Arabic:wght@400;600;700&display=swap">
+<style>
+/* Layout: one-screen tool — clock + mode on top, big elixir bar, cost keypad, play log */
+:root{
+  --bg:#f5f1f6; --surface:#ffffff; --fg:#251a2b; --muted:#76687d; --line:#e2d9e6;
+  --elixir:#c3189a; --elixir-2:#e85fc6; --empty:#ece3ef; --x2:#d97706; --x3:#dc2626; --ok:#15803d;
+  --display:"Lalezar","IBM Plex Sans Arabic",system-ui,sans-serif;
+  --body:"IBM Plex Sans Arabic",system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#17111b; --surface:#221a28; --fg:#f3ebf6; --muted:#a898b0; --line:#382c40;
+  --elixir:#e33bb8; --elixir-2:#f58ad8; --empty:#2f2536; --x2:#f59e0b; --x3:#f87171; --ok:#4ade80; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#17111b; --surface:#221a28; --fg:#f3ebf6; --muted:#a898b0; --line:#382c40;
+  --elixir:#e33bb8; --elixir-2:#f58ad8; --empty:#2f2536; --x2:#f59e0b; --x3:#f87171; --ok:#4ade80; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);direction:rtl;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:16px}
+.wrap{max-width:520px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+h1{font-family:var(--display);font-weight:400;font-size:1.7rem;margin:0;text-wrap:balance}
+.sub{color:var(--muted);margin:0;font-size:.9rem}
+.top{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.clock{font-family:var(--display);font-size:2rem;font-variant-numeric:tabular-nums;direction:ltr}
+.modes{display:flex;gap:6px}
+.mode{border:1.5px solid var(--line);background:var(--surface);color:var(--fg);border-radius:999px;padding:6px 14px;font:700 .95rem var(--body);cursor:pointer}
+.mode[aria-pressed="true"][data-m="1"]{background:var(--elixir);border-color:var(--elixir);color:#fff}
+.mode[aria-pressed="true"][data-m="2"]{background:var(--x2);border-color:var(--x2);color:#fff}
+.mode[aria-pressed="true"][data-m="3"]{background:var(--x3);border-color:var(--x3);color:#fff}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.readout{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.big{font-family:var(--display);font-size:4.2rem;line-height:1;color:var(--elixir);font-variant-numeric:tabular-nums}
+.big small{font-size:1.6rem;color:var(--muted)}
+.hint{font-weight:600;font-size:.95rem;text-align:left}
+.bar{display:grid;grid-template-columns:repeat(10,1fr);gap:4px;direction:ltr}
+.seg{height:30px;border-radius:6px;background:var(--empty);overflow:hidden;position:relative}
+.seg i{position:absolute;inset:0 auto 0 0;background:linear-gradient(180deg,var(--elixir-2),var(--elixir));display:block}
+.label{font-size:.8rem;letter-spacing:.04em;color:var(--muted);font-weight:600}
+.pad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.pad.small{grid-template-columns:repeat(7,1fr);gap:6px}
+.pad.small .cost{font-size:1.3rem}
+.pad.main .cost{font-size:2.8rem}
+.panel.alert{animation:flash .5s 2}
+.voice{width:100%;border:2px dashed var(--elixir);background:var(--bg);color:var(--fg);border-radius:12px;padding:14px;font:600 1.1rem var(--body)}
+.voice:focus{outline:none;border-style:solid}
+.vstat{min-height:1.2em;font-size:.9rem;color:var(--muted)}
+@keyframes flash{50%{background:var(--ok);border-color:var(--ok)}}
+.adj{display:flex;gap:6px;align-items:center}
+.adj button{border:1.5px solid var(--line);background:var(--surface);color:var(--fg);border-radius:10px;padding:6px 10px;font:700 .9rem var(--body);cursor:pointer;direction:ltr}
+.cost{aspect-ratio:1/1;max-width:100%;border:none;border-radius:14px;background:var(--elixir);color:#fff;font:400 1.9rem var(--display);cursor:pointer;
+  clip-path:polygon(50% 0,92% 30%,92% 78%,50% 100%,8% 78%,8% 30%);transition:transform .08s}
+.cost:active{transform:scale(.92)}
+.cost:disabled{opacity:.35;cursor:default}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.btn{flex:1 1 120px;border:1.5px solid var(--line);background:var(--surface);color:var(--fg);border-radius:12px;padding:12px;font:700 1rem var(--body);cursor:pointer}
+.btn.primary{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+button:focus-visible{outline:3px solid var(--elixir-2);outline-offset:2px}
+.log{display:flex;flex-wrap:wrap;gap:6px;min-height:28px}
+.chip{background:var(--empty);border-radius:999px;padding:3px 10px;font-size:.85rem;font-variant-numeric:tabular-nums}
+.chip b{color:var(--elixir)}
+.tips{color:var(--muted);font-size:.88rem;line-height:1.7;margin:0;padding-inline-start:18px}
+.auto{display:flex;align-items:center;gap:8px;font-size:.9rem;color:var(--muted)}
+@media (prefers-reduced-motion:reduce){.cost{transition:none}.panel.alert{animation:none;outline:3px solid var(--ok)}}
+</style>
+</head>
+<body>
+
+
+<div class="wrap">
+  <header>
+    <h1>عدّاد إكسير الخصم</h1>
+    <p class="sub">دوس «ابدأ» مع بداية الماتش، وكل ما الخصم يلعب كارت دوس على تكلفته.</p>
+  </header>
+
+  <div class="top">
+    <div class="adj">
+      <div class="clock" id="clock">0:00</div>
+      <button id="minus5" aria-label="ارجع 5 ثواني">−5s</button>
+      <button id="plus5" aria-label="قدّم 5 ثواني">+5s</button>
+    </div>
+    <div class="modes" role="group" aria-label="سرعة الإكسير">
+      <button class="mode" data-m="1" aria-pressed="true">×1</button>
+      <button class="mode" data-m="2" aria-pressed="false">×2</button>
+      <button class="mode" data-m="3" aria-pressed="false">×3</button>
+    </div>
+  </div>
+  <label class="auto"><input type="checkbox" id="auto" checked> تغيير السرعة تلقائيًا حسب وقت الماتش (×2 في آخر دقيقة، ×3 في آخر دقيقة من الوقت الإضافي)</label>
+
+  <section class="panel" id="meter" aria-live="polite">
+    <div class="readout">
+      <div class="big" id="num">5.0<small>/10</small></div>
+      <div class="hint" id="hint">جاهز</div>
+    </div>
+    <div class="bar" id="bar"></div>
+  </section>
+
+  <section class="panel">
+    <button class="btn primary" id="mic" aria-pressed="false">🎙️ شغّل المايك</button>
+    <div class="label">أو: اضغط الخانة دي ثم مايك الكيبورد وقول الرقم</div>
+    <input id="voice" class="voice" type="text" inputmode="text" autocomplete="off" placeholder="🎤 قول: خمسة، تلاتة، تراجع…" aria-label="إدخال بالصوت أو الكتابة">
+    <div class="vstat" id="vstat"></div>
+    <div class="label">أو دوس على التكلفة:</div>
+    <div class="pad main" id="pad"></div>
+    <div class="pad small" id="pad2"></div>
+    <label class="auto"><input type="checkbox" id="vib" checked> اهتزاز لما الخصم ينزل لحوالي 3 إكسير</label>
+    <label class="auto"><input type="checkbox" id="tts" checked> صوت يقول «تقدر تهجم» لما الخصم ينزل لحوالي 3</label>
+  </section>
+
+  <div class="row">
+    <button class="btn primary" id="start">ابدأ</button>
+    <button class="btn" id="undo">تراجع</button>
+    <button class="btn" id="reset">ماتش جديد</button>
+  </div>
+
+  <section class="panel">
+    <div class="label">آخر الكروت</div>
+    <div class="log" id="log"><span class="sub">مفيش كروت لسه</span></div>
+  </section>
+
+  <ul class="tips">
+    <li>الشحن الطبيعي: نقطة كل 2.8 ثانية، ×2 كل 1.4، ×3 كل 0.93 ثانية تقريبًا.</li>
+    <li>لما الرقم يكون 3 أو أقل، الخصم مش هيقدر يرد على هجمة كبيرة.</li>
+    <li>الأداة تقريبية، لأن ممكن تتأخر شوية في الضغط. استخدمها للتدريب على العدّ في دماغك.</li>
+  </ul>
+</div>
+
+<script>
+const RATE={1:1/2.8,2:1/1.4,3:3/2.8};
+let s={elixir:5,t:0,mode:1,running:false,log:[]};
+let last=null;
+const $=id=>document.getElementById(id);
+const bar=$('bar'),pad=$('pad');
+for(let i=0;i<10;i++){const d=document.createElement('div');d.className='seg';d.innerHTML='<i></i>';bar.appendChild(d)}
+function mk(c,parent){const b=document.createElement('button');b.className='cost';b.textContent=c;b.setAttribute('aria-label','تكلفة '+c);b.onclick=()=>play(c);parent.appendChild(b)}
+[3,4,5].forEach(c=>mk(c,pad));
+[1,2,6,7,8,9,10].forEach(c=>mk(c,$('pad2')));
+
+function alertLow(){
+  const m=$('meter');m.classList.remove('alert');void m.offsetWidth;m.classList.add('alert');
+  if($('vib').checked){try{navigator.vibrate&&navigator.vibrate([90,60,90])}catch(e){}}
+}
+function shift(sec){
+  const nt=Math.max(0,s.t+sec);const d=nt-s.t;s.t=nt;
+  if($('auto').checked)setMode(autoMode(s.t));
+  s.elixir=Math.max(0,Math.min(10,s.elixir+RATE[s.mode]*d));render();
+}
+// voice via keyboard dictation: parse numbers (digits or Arabic/English words) as they arrive
+const WORDS={'واحد':1,'واحده':1,'اتنين':2,'اثنين':2,'اثنان':2,'تنين':2,'تلاته':3,'ثلاثه':3,'تلات':3,'ثلاث':3,'اربعه':4,'اربع':4,
+ 'خمسه':5,'خمس':5,'سته':6,'ست':6,'سبعه':7,'سبع':7,'تمانيه':8,'ثمانيه':8,'تمنيه':8,'تمان':8,'ثمان':8,'تسعه':9,'تسع':9,'عشره':10,'عشر':10,
+ 'one':1,'two':2,'three':3,'four':4,'five':5,'six':6,'seven':7,'eight':8,'nine':9,'ten':10};
+const UNDO=['تراجع','رجوع','الغي','undo'];
+function norm(w){return w.toLowerCase().replace(/[ً-ْـ]/g,'').replace(/[أإآ]/g,'ا').replace(/ة/g,'ه').replace(/ى/g,'ي')
+  .replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/^و(?=.{3,})/,m=>'')}
+function lookup(raw){const w=raw.toLowerCase().replace(/[ً-ْـ]/g,'').replace(/[أإآ]/g,'ا').replace(/ة/g,'ه').replace(/ى/g,'ي');
+  if(WORDS[w])return WORDS[w];const t=norm(raw);return /^\d+$/.test(t)?+t:WORDS[t]}
+let vt=null;const vin=$('voice');
+function parseVoice(){handleText(vin.value);vin.value=''}
+function handleText(text){
+  const toks=text.split(/[\s,،.]+/).filter(Boolean);
+  const done=[];
+  for(const raw of toks){
+    if(UNDO.includes(norm(raw))){$('undo').click();done.push('تراجع');continue}
+    const n=lookup(raw);
+    if(n>=1&&n<=10){play(n);done.push(n)}
+  }
+  $('vstat').textContent=done.length?('اتسجّل: '+done.join('، ')):('مفهمتش: «'+text.trim()+'»');
+}
+// real microphone (works when the page is opened directly in Chrome over https)
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+let rec=null,listening=false;
+function setMic(on){listening=on;$('mic').textContent=on?'🎙️ المايك شغال (اضغط للإيقاف)':'🎙️ شغّل المايك';$('mic').setAttribute('aria-pressed',String(on))}
+$('mic').onclick=()=>{
+  if(listening){listening=false;try{rec&&rec.stop()}catch(e){}setMic(false);return}
+  if(!SR){$('vstat').textContent='المايك مش مدعوم هنا. افتح الأداة من Chrome، أو استخدم مايك الكيبورد.';return}
+  try{
+    rec=new SR();rec.lang='ar-EG';rec.continuous=true;rec.interimResults=false;
+    rec.onresult=e=>{for(let i=e.resultIndex;i<e.results.length;i++)if(e.results[i].isFinal)handleText(e.results[i][0].transcript)};
+    rec.onerror=e=>{if(e.error==='not-allowed'||e.error==='service-not-allowed'){listening=false;setMic(false);$('vstat').textContent='الصلاحية مرفوضة. اسمح بالمايك من إعدادات المتصفح، أو استخدم مايك الكيبورد.'}};
+    rec.onend=()=>{if(listening){try{rec.start()}catch(e){}}};
+    rec.start();setMic(true);$('vstat').textContent='بسمعك… قول تكلفة الكارت';
+  }catch(e){setMic(false);$('vstat').textContent='مقدرتش أشغّل المايك هنا. استخدم مايك الكيبورد.'}
+};
+// spoken alert
+let armed=true;
+function say(t){if(!$('tts').checked)return;try{const u=new SpeechSynthesisUtterance(t);u.lang='ar-SA';u.rate=1.1;speechSynthesis.cancel();speechSynthesis.speak(u)}catch(e){}}
+vin.addEventListener('input',()=>{clearTimeout(vt);vt=setTimeout(parseVoice,600)});
+vin.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();clearTimeout(vt);parseVoice()}});
+$('plus5').onclick=()=>shift(5);
+$('minus5').onclick=()=>shift(-5);
+
+function autoMode(t){ // ladder: 3:00 regulation (last min x2), 2:00 overtime (x2 then x3 last min)
+  if(t<120)return 1; if(t<240)return 2; return 3;
+}
+function setMode(m){s.mode=m;document.querySelectorAll('.mode').forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.m===m)))}
+document.querySelectorAll('.mode').forEach(b=>b.onclick=()=>{$('auto').checked=false;setMode(+b.dataset.m)});
+
+function play(c){
+  s.log.unshift({c,before:s.elixir,t:s.t});
+  const before=s.elixir;
+  s.elixir=Math.max(0,s.elixir-c);
+  if(armed&&s.elixir<=3.4){armed=false;alertLow();say('تقدر تهجم')}
+  render();
+}
+$('undo').onclick=()=>{const l=s.log.shift();if(l){s.elixir=Math.min(10,s.elixir+l.c)}render()};
+$('reset').onclick=()=>{s={elixir:5,t:0,mode:1,running:false,log:[]};setMode(1);$('auto').checked=true;render()};
+$('start').onclick=()=>{s.running=!s.running;last=null;render();if(s.running)requestAnimationFrame(tick)};
+
+function tick(now){
+  if(!s.running)return;
+  if(last!==null){
+    const dt=Math.min(.25,(now-last)/1000);
+    s.t+=dt;
+    if($('auto').checked)setMode(autoMode(s.t));
+    s.elixir=Math.min(10,s.elixir+RATE[s.mode]*dt);
+  }
+  last=now;render();requestAnimationFrame(tick);
+}
+function fmt(t){const m=Math.floor(t/60),x=Math.floor(t%60);return m+':'+String(x).padStart(2,'0')}
+function render(){
+  const e=s.elixir;
+  if(e>=4.5)armed=true;
+  $('num').innerHTML=e.toFixed(1)+'<small>/10</small>';
+  [...bar.children].forEach((d,i)=>{d.firstChild.style.width=Math.max(0,Math.min(1,e-i))*100+'%'});
+  $('clock').textContent=fmt(s.t);
+  $('start').textContent=s.running?'إيقاف مؤقت':(s.t>0?'كمّل':'ابدأ');
+  const h=$('hint');
+  if(e<=3.4){h.textContent='فرصة تهاجم!';h.style.color='var(--ok)'}
+  else if(e>=9.5){h.textContent='الخصم مليان، خلي بالك';h.style.color='var(--x3)'}
+  else{h.textContent='عادي';h.style.color='var(--muted)'}
+  const log=$('log');
+  log.innerHTML=s.log.length?s.log.slice(0,12).map(l=>`<span class="chip"><b>${l.c}</b> · ${fmt(l.t)}</span>`).join(''):'<span class="sub">مفيش كروت لسه</span>';
+}
+render();
+</script>
+
+</body>
+</html>
